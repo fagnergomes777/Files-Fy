@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron')
 const path = require('path')
 
 let mainWindow
@@ -21,7 +21,76 @@ function createWindow () {
   })
 }
 
-app.whenReady().then(createWindow)
+function createMenu() {
+  const template = [
+    {
+      label: 'Arquivo',
+      submenu: [
+        {
+          label: 'Sair',
+          accelerator: 'CmdOrCtrl+Q',
+          click: () => {
+            app.quit()
+          }
+        }
+      ]
+    },
+    {
+      label: 'Editar',
+      submenu: [
+        { label: 'Desfazer', accelerator: 'CmdOrCtrl+Z', role: 'undo' },
+        { label: 'Refazer', accelerator: 'CmdOrCtrl+Y', role: 'redo' },
+        { type: 'separator' },
+        { label: 'Cortar', accelerator: 'CmdOrCtrl+X', role: 'cut' },
+        { label: 'Copiar', accelerator: 'CmdOrCtrl+C', role: 'copy' },
+        { label: 'Colar', accelerator: 'CmdOrCtrl+V', role: 'paste' },
+        { label: 'Selecionar Tudo', accelerator: 'CmdOrCtrl+A', role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'Exibir',
+      submenu: [
+        { label: 'Recarregar', accelerator: 'F5', role: 'reload' },
+        { label: 'Forçar Recarregar', accelerator: 'CmdOrCtrl+Shift+R', role: 'forceReload' },
+        { label: 'Ferramentas de Desenvolvimento', accelerator: 'F12', role: 'toggleDevTools' },
+        { type: 'separator' },
+        { label: 'Tela Cheia', accelerator: 'F11', role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Janela',
+      submenu: [
+        { label: 'Minimizar', accelerator: 'CmdOrCtrl+M', role: 'minimize' },
+        { label: 'Maximizar', role: 'maximize' },
+        { label: 'Fechar', accelerator: 'CmdOrCtrl+W', role: 'close' }
+      ]
+    },
+    {
+      label: 'Ajuda',
+      submenu: [
+        {
+          label: 'Sobre Filesfy',
+          click: () => {
+            dialog.showMessageBox(mainWindow, {
+              type: 'info',
+              title: 'Sobre Filesfy',
+              message: 'Filesfy - Recuperação de Dados',
+              detail: 'Versão 1.0.0\n\nUma aplicação de desktop para recuperação segura de arquivos deletados.\n\n© 2026 Filesfy Inc. Todos os direitos reservados.'
+            })
+          }
+        }
+      ]
+    }
+  ]
+
+  const menu = Menu.buildFromTemplate(template)
+  Menu.setApplicationMenu(menu)
+}
+
+app.whenReady().then(() => {
+  createWindow()
+  createMenu()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

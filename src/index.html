@@ -2,14 +2,19 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
+  <meta name="google-client-id" content="USE_YOUR_GOOGLE_CLIENT_ID_FROM_CONSOLE.apps.googleusercontent.com">
   <title>Filesfy - Recuperação de Dados</title>
   <link rel="stylesheet" href="./styles.css" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <div id="app">
     <header class="app-header">
       <h1>Filesfy - Recuperação de Dados</h1>
-      <p>Recupere arquivos apagados de HDs e pendrives em poucos passos.</p>
+      <div class="header-right">
+        <span id="user-info" class="user-info" style="display:none;"></span>
+        <button id="logout-btn" class="btn-logout" style="display:none;">Sair</button>
+      </div>
     </header>
 
     <main id="wizard">
@@ -17,10 +22,52 @@
     </main>
 
     <footer class="app-footer">
-      <span>Passo <span id="step-indicator">1</span> de 5</span>
+      <div class="footer-content">
+        <div class="footer-left">
+          <span class="footer-logo">©</span>
+          <span class="footer-copyright">2026 Filesfy Inc. Todos os direitos reservados.</span>
+        </div>
+        <div class="footer-links">
+          <a href="#" onclick="showPrivacyPolicy(event)">Política de Privacidade</a>
+          <span class="separator">•</span>
+          <a href="#" onclick="showProductPolicy(event)">Política de Produtos</a>
+          <span class="separator">•</span>
+          <a href="#" onclick="showLicenseAgreement(event)">Contratos de Licença</a>
+          <span class="separator">•</span>
+          <a href="#" onclick="showCookies(event)">Preferências de cookies</a>
+          <span class="separator">•</span>
+          <a href="#" onclick="showAbout(event)">Sobre o Filesfy</a>
+        </div>
+      </div>
     </footer>
   </div>
 
+  <!-- Modal de Autenticação -->
+  <div id="auth-modal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <button class="modal-close">&times;</button>
+      <div id="login-form"></div>
+    </div>
+  </div>
+
+  <!-- Modal de Planos -->
+  <div id="plans-modal" class="modal-overlay hidden">
+    <div class="modal-content large">
+      <button class="modal-close">&times;</button>
+      <div id="plans-container"></div>
+    </div>
+  </div>
+
+  <!-- Modal de Pagamento -->
+  <div id="payment-modal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <button class="modal-close">&times;</button>
+      <div id="payment-form"></div>
+    </div>
+  </div>
+
+  <script src="./api.js"></script>
+  <script src="./auth.js"></script>
   <script src="./renderer.js"></script>
 </body>
 </html>
