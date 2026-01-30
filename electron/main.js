@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron')
 const path = require('path')
 
 let mainWindow
+let currentTheme = 'dark' // Tema padrão
 
 function createWindow () {
   mainWindow = new BrowserWindow({
@@ -19,6 +20,35 @@ function createWindow () {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+}
+
+// Função para alternar tema
+function toggleTheme() {
+  currentTheme = currentTheme === 'dark' ? 'light' : 'dark'
+  
+  if (mainWindow) {
+    mainWindow.webContents.send('theme-changed', currentTheme)
+  }
+  
+  return currentTheme
+}
+
+// Função para obter tema atual
+function getCurrentTheme() {
+  return currentTheme
+}
+
+// Função para definir tema específico
+function setTheme(theme) {
+  if (theme === 'dark' || theme === 'light') {
+    currentTheme = theme
+    
+    if (mainWindow) {
+      mainWindow.webContents.send('theme-changed', currentTheme)
+    }
+  }
+  
+  return currentTheme
 }
 
 function createMenu() {
@@ -53,6 +83,30 @@ function createMenu() {
         { label: 'Recarregar', accelerator: 'F5', role: 'reload' },
         { label: 'Forçar Recarregar', accelerator: 'CmdOrCtrl+Shift+R', role: 'forceReload' },
         { label: 'Ferramentas de Desenvolvimento', accelerator: 'F12', role: 'toggleDevTools' },
+        { type: 'separator' },
+        {
+          label: 'Tema',
+          submenu: [
+            {
+              label: 'Tema Escuro',
+              type: 'radio',
+              checked: currentTheme === 'dark',
+              click: () => setTheme('dark')
+            },
+            {
+              label: 'Tema Claro',
+              type: 'radio',
+              checked: currentTheme === 'light',
+              click: () => setTheme('light')
+            },
+            { type: 'separator' },
+            {
+              label: 'Alternar Tema',
+              accelerator: 'CmdOrCtrl+Shift+T',
+              click: toggleTheme
+            }
+          ]
+        },
         { type: 'separator' },
         { label: 'Tela Cheia', accelerator: 'F11', role: 'togglefullscreen' }
       ]
@@ -107,6 +161,21 @@ ipcMain.handle('list-devices', async () => {
     { id: 'D', label: 'Dados (D:)', size: '1 TB', type: 'HD interno' },
     { id: 'USB1', label: 'Pendrive (E:)', size: '32 GB', type: 'Pendrive' }
   ]
+})
+
+// Handler para obter tema atual
+ipcMain.handle('get-theme', async () => {
+  return getCurrentTheme()
+})
+
+// Handler para alternar tema
+ipcMain.handle('toggle-theme', async () => {
+  return toggleTheme()
+})
+
+// Handler para definir tema específico
+ipcMain.handle('set-theme', async (event, theme) => {
+  return setTheme(theme)
 })
 
 ipcMain.handle('start-scan', async (event, { deviceId, fileType }) => {

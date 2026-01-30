@@ -36,15 +36,15 @@ const PLANS = {
     button: 'Começar Grátis',
     features: [
       { name: 'Até 1 varridas por mês', included: true },
-      { name: 'Limite 500MB por varredura', included: true },
-      { name: 'Máximo 3 arquivos', included: true },
+      { name: 'Limite 300MB por varredura', included: true },
+      { name: 'Máximo 5 arquivos', included: true },
       { name: 'Recuperação básica', included: true },
-      { name: 'Suporte por email', included: true },
-      { name: 'Histórico 4 dias', included: true },
+      { name: 'Histórico 10 dias', included: true },
       { name: 'Com anúncios', included: true },
       { name: 'Armazenamento 300MB', included: true },
       { name: 'Varreduras ilimitadas', included: false },
-      { name: 'Sem limite de arquivos', included: false }
+      { name: 'Sem limite de arquivos', included: false },
+      { name: 'Suporte por email', included: false },
     ]
   },
   pro: {
@@ -56,15 +56,15 @@ const PLANS = {
     button: 'Fazer Upgrade PRO',
     features: [
       { name: 'Até 5 varridas por mês', included: true },
-      { name: 'Limite 100MB por varredura', included: true },
-      { name: 'Máximo 7 arquivos', included: true },
+      { name: 'Limite 1GB por varredura', included: true },
+      { name: 'Máximo 10 arquivos', included: true },
       { name: 'Recuperação avançada', included: true },
-      { name: 'Suporte por email', included: true },
       { name: 'Histórico 30 dias', included: true },
       { name: 'Sem anúncios', included: true },
-      { name: 'Armazenamento 500MB', included: true },
+      { name: 'Armazenamento 1GB', included: true },
       { name: 'Varreduras ilimitadas', included: true },
-      { name: 'Sem limite de arquivos', included: true }
+      { name: 'Sem limite de arquivos', included: true },
+      { name: 'Suporte por email', included: true },
     ]
   }
 };
@@ -89,6 +89,14 @@ window.addEventListener('authChanged', (e) => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Inicializar Google Sign-In
+  if (typeof google !== 'undefined' && google.accounts) {
+    google.accounts.id.initialize({
+      client_id: 'YOUR_GOOGLE_CLIENT_ID',
+      callback: handleGoogleSignIn
+    });
+  }
+  
   initAccessibilityControls();
   if (typeof authManager !== 'undefined' && authManager.isAuthenticated()) {
     currentUser = authManager.getUser();
@@ -232,39 +240,58 @@ function filterPlan(planType) {
 
 function selectFreePlan() {
   selectedPlan = 'free';
-  currentUser = null;
-  showHomePage();
+  showLoginPage('free');
 }
 
 function selectProPlan() {
   currentStep = 0;
   selectedPlan = 'pro';
   
-  const planInfo = PLANS.pro;
+  // Se já está autenticado, ir direto para pagamento
+  if (currentUser && currentUser.id) {
+    showPaymentPage();
+    return;
+  }
+  
+  // Caso contrário, mostrar tela de autenticação
+  showLoginPage('pro');
+}
+
+function showLoginPage(planType = 'free') {
+  currentStep = 0;
+  selectedPlan = planType;
+  
+  const planInfo = PLANS[planType];
+  const containerId = `google-login-container-${planType}`;
+  const isOptional = planType === 'free';
   
   const html = `
     <div class="home-container">
       <div class="welcome-section">
-        <h1>Upgrade para PRO</h1>
-        <p>${planInfo ? planInfo.name + ' - ' + planInfo.price : 'Plano PRO'}</p>
+        <h1>${planType === 'pro' ? 'Upgrade para PRO' : planInfo.name}</h1>
+        <p>${planType === 'pro' ? planInfo.name + ' - ' + planInfo.price : planInfo.price + ' - ' + planInfo.duration}</p>
       </div>
 
       <div class="plan-summary">
         <h3>Seu plano inclui:</h3>
         <div class="summary-grid">
-          ${planInfo && planInfo.features ? planInfo.features.filter(f => f.included).map(f => `
+          ${planInfo.features.filter(f => f.included).map(f => `
             <div class="summary-item">
               <span class="check">✓</span>
               <span>${f.name}</span>
             </div>
-          `).join('') : ''}
+          `).join('')}
         </div>
       </div>
 
       <div class="action-buttons">
-        <button class="btn-primary" onclick="showPaymentPage()">
-          💳 Continuar para Pagamento
-        </button>
+        <div class="auth-options">
+          <p style="margin-bottom: 15px; color: #666; font-size: 14px;">
+            ℹ️ ${isOptional ? 'Faça login para começar (opcional)' : 'Faça login para continuar'}
+          </p>
+          <div id="${containerId}"></div>
+          ${isOptional ? '<button class="btn-secondary" onclick="startFreeWithoutLogin()" style="margin-top: 15px; width: 100%;">➜ Começar sem Login</button>' : '<button class="btn-secondary" onclick="handleTestLoginPro()" style="margin-top: 15px; width: 100%;">🧪 Continuar em Modo Teste</button>'}
+        </div>
       </div>
 
       <button class="btn-cancel" onclick="showPlansComparison()">
@@ -274,31 +301,36 @@ function selectProPlan() {
   `;
   
   wizardEl.innerHTML = html;
-}
-
-async function handleGoogleProSignIn(response) {
-  try {
-    const { credential } = response;
-    if (typeof authManager !== 'undefined') {
-      await authManager.loginWithGoogle(credential, null);
-      currentUser = authManager.getUser();
-      selectedPlan = 'pro';
-      updateHeader();
-      loadUserSubscription();
-      showPaymentPage();
-    }
-  } catch (error) {
-    console.error('Erro no login:', error);
-    
-    if (error.error && error.error.includes('Google OAuth não está configurado')) {
-      alert('⚠️ Google OAuth não configurado.\n\nSiga os passos em CONFIGURACAO_GOOGLE_OAUTH.md para configurar suas credenciais Google.');
-    } else {
-      alert('Erro ao fazer login com Google. Tente novamente.');
-    }
+  
+  // Carregar Google Sign-In se disponível
+  if (typeof google !== 'undefined' && google.accounts) {
+    setTimeout(() => {
+      const container = document.getElementById(containerId);
+      if (container) {
+        google.accounts.id.initialize({
+          client_id: 'YOUR_GOOGLE_CLIENT_ID',
+          callback: handleGoogleSignIn
+        });
+        
+        google.accounts.id.renderButton(container, {
+          type: 'standard',
+          size: 'large',
+          text: 'signin_with',
+          locale: 'pt-BR',
+          width: '100%'
+        });
+      }
+    }, 100);
   }
 }
 
-async function handleTestLogin() {
+function startFreeWithoutLogin() {
+  currentUser = null;
+  selectedPlan = 'free';
+  showHomePage();
+}
+
+async function handleTestLoginPro() {
   try {
     const testUser = {
       email: `user_${Date.now()}@filesfy.test`,
@@ -312,7 +344,7 @@ async function handleTestLogin() {
       localStorage.setItem('user_data', JSON.stringify(response.user));
       
       currentUser = response.user;
-      selectedPlan = 'PRO';
+      selectedPlan = 'pro';
       updateHeader();
       loadUserSubscription();
       showPaymentPage();
@@ -320,7 +352,31 @@ async function handleTestLogin() {
       alert('Erro: Resposta inválida do servidor. Verifique o console.');
     }
   } catch (error) {
+    console.error('❌ Erro em test login:', error);
     alert('Erro ao fazer login em modo teste:\n\n' + (error.error || error.message || 'Verifique a conexão com o servidor'));
+  }
+}
+
+async function handleGoogleSignIn(response) {
+  try {
+    const { credential } = response;
+    if (typeof authManager !== 'undefined') {
+      await authManager.loginWithGoogle(credential, null);
+      currentUser = authManager.getUser();
+      
+      updateHeader();
+      loadUserSubscription();
+      
+      // Navegar conforme plano selecionado
+      if (selectedPlan === 'pro') {
+        showPaymentPage();
+      } else {
+        showHomePage();
+      }
+    }
+  } catch (error) {
+    console.error('Erro no login:', error);
+    alert('Erro ao fazer login com Google. Tente novamente.');
   }
 }
 
@@ -367,6 +423,15 @@ function showHomePage() {
 
 function showPaymentPage() {
   currentStep = 0;
+  
+  // Validar autenticação
+  if (!currentUser || !currentUser.id) {
+    console.warn('⚠️ Usuário não autenticado. Redirecionando para login...');
+    showProLoginPage();
+    return;
+  }
+  
+  console.log('💳 Abrindo página de pagamento para usuário:', currentUser.id);
   
   wizardEl.innerHTML = `
     <div class="payment-container">
@@ -437,20 +502,25 @@ async function processPayment(method) {
   `;
   
   try {
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    if (typeof ApiClient !== 'undefined' && currentUser) {
-      const paymentIntent = await ApiClient.createPaymentIntent(
-        currentUser.id,
-        'PRO',
-        method
-      );
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      await loadUserSubscription();
-      showPaymentSuccess();
+    if (!currentUser || !currentUser.id) {
+      throw new Error('Usuário não autenticado ou ID não disponível. Por favor, faça login novamente.');
     }
+    
+    if (typeof ApiClient === 'undefined') {
+      throw new Error('Cliente API não disponível');
+    }
+    
+    const paymentIntent = await ApiClient.createPaymentIntent(
+      currentUser.id,
+      'PRO',
+      method
+    );
+    
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await loadUserSubscription();
+    showPaymentSuccess();
   } catch (error) {
+    console.error('❌ Erro no pagamento:', error);
     wizardEl.innerHTML = `
       <div class="error-container">
         <h2>Erro no Pagamento</h2>
@@ -680,37 +750,100 @@ function renderScan() {
 function renderResults() {
   currentStep = 4;
   
-  // Gerar resultados mock
-  scanResults = [
-    { id: 1, name: 'Foto_Férias_2024.jpg', size: '4.2MB', type: 'image', canRecover: true },
-    { id: 2, name: 'Vídeo_Aniversário.mp4', size: '512MB', type: 'video', canRecover: true },
-    { id: 3, name: 'Documento_Importante.pdf', size: '2.1MB', type: 'document', canRecover: true },
-    { id: 4, name: 'Planilha_2024.xlsx', size: '1.5MB', type: 'document', canRecover: true },
-    { id: 5, name: 'Música_Favorita.mp3', size: '8.5MB', type: 'audio', canRecover: true },
-    { id: 6, name: 'Apresentação.pptx', size: '15.3MB', type: 'document', canRecover: true },
-    { id: 7, name: 'Código_Projeto.zip', size: '52.1MB', type: 'archive', canRecover: selectedPlan === 'pro' },
-    { id: 8, name: 'Backup_Database.sql', size: '128.5MB', type: 'document', canRecover: selectedPlan === 'pro' }
+  // Gerar resultados mock com tamanhos maiores para teste
+  const allResults = [
+    { id: 1, name: 'Foto_Férias_2024.jpg', size: '4.2MB', sizeInMB: 4.2, type: 'image' },
+    { id: 2, name: 'Vídeo_Aniversário.mp4', size: '512MB', sizeInMB: 512, type: 'video' },
+    { id: 3, name: 'Documento_Importante.pdf', size: '2.1MB', sizeInMB: 2.1, type: 'document' },
+    { id: 4, name: 'Planilha_2024.xlsx', size: '1.5MB', sizeInMB: 1.5, type: 'document' },
+    { id: 5, name: 'Música_Favorita.mp3', size: '8.5MB', sizeInMB: 8.5, type: 'audio' },
+    { id: 6, name: 'Apresentação.pptx', size: '15.3MB', sizeInMB: 15.3, type: 'document' },
+    { id: 7, name: 'Código_Projeto.zip', size: '52.1MB', sizeInMB: 52.1, type: 'archive' },
+    { id: 8, name: 'Backup_Database.sql', size: '128.5MB', sizeInMB: 128.5, type: 'document' },
+    { id: 9, name: 'Vídeo_Completo.mkv', size: '256MB', sizeInMB: 256, type: 'video' },
+    { id: 10, name: 'Arquivo_Grande.iso', size: '450MB', sizeInMB: 450, type: 'archive' }
   ];
   
-  // Aplicar limite do plano FREE
-  if (selectedPlan === 'free') {
-    scanResults = scanResults.slice(0, 5);
-  }
+  // Mapear tipos selecionados para tipos de arquivo
+  const typeMapping = {
+    todos: ['image', 'video', 'audio', 'document', 'archive'],
+    imagens: ['image'],
+    videos: ['video'],
+    audio: ['audio'],
+    docs: ['document'],
+    archive: ['archive']
+  };
+  
+  const allowedTypes = typeMapping[selectedFileType] || typeMapping.todos;
+  
+  // Filtrar por tipo de arquivo selecionado
+  const filteredResults = allResults.filter(file => allowedTypes.includes(file.type));
+  
+  // Definir limites por plano
+  const planLimits = {
+    free: { maxFiles: 5, maxSizeMB: 300 },
+    pro: { maxFiles: 10, maxSizeMB: 1024 }
+  };
+  
+  const currentPlan = (selectedPlan || 'free').toLowerCase();
+  const limits = planLimits[currentPlan];
+  
+  // Aplicar filtros de limite
+  scanResults = [];
+  let totalSizeMB = 0;
+  let fileCount = 0;
+  
+  filteredResults.forEach(file => {
+    // Verificar se pode adicionar este arquivo
+    const wouldExceedFileLimit = fileCount >= limits.maxFiles;
+    const wouldExceedSizeLimit = (totalSizeMB + file.sizeInMB) > limits.maxSizeMB;
+    const canRecover = !wouldExceedFileLimit && !wouldExceedSizeLimit;
+    
+    scanResults.push({
+      ...file,
+      canRecover,
+      blockedReason: wouldExceedFileLimit ? 'Limite de arquivos atingido' : 
+                     wouldExceedSizeLimit ? 'Limite de tamanho atingido' : null
+    });
+    
+    // Contar apenas arquivos recuperáveis
+    if (canRecover) {
+      totalSizeMB += file.sizeInMB;
+      fileCount++;
+    }
+  });
   
   selectedFiles = [];
+  
+  // Mapear nome do tipo para exibição
+  const typeDisplayNames = {
+    todos: 'Todos os Arquivos',
+    imagens: 'Imagens',
+    videos: 'Vídeos',
+    audio: 'Áudio',
+    docs: 'Documentos'
+  };
+  
+  const typeDisplay = typeDisplayNames[selectedFileType] || 'Arquivos';
   
   let html = `
     <div class="step-container">
       <h2>Arquivos Encontrados</h2>
       <div class="results-header">
         <button class="btn-small" id="btn-select-all">Selecionar Tudo</button>
-        <span class="results-count">0 / ${scanResults.length} selecionados</span>
+        <span class="results-count">0 / ${scanResults.filter(f => f.canRecover).length} selecionados</span>
+      </div>
+      <div class="results-info">
+        <p>Tipo: <strong>${typeDisplay}</strong> | Plano: <strong>${currentPlan.toUpperCase()}</strong> | Limite: <strong>${limits.maxFiles} arquivos</strong>, <strong>${limits.maxSizeMB}MB</strong> por varredura</p>
       </div>
       <div class="results-list">
   `;
   
   scanResults.forEach(file => {
     const disabled = !file.canRecover ? 'disabled' : '';
+    const blockedIcon = file.blockedReason ? '🔒' : '✓';
+    const blockedMessage = file.blockedReason ? `<p class="blocked-reason">${blockedIcon} ${file.blockedReason}</p>` : '';
+    
     html += `
       <div class="result-item ${disabled}" data-file-id="${file.id}">
         <input type="checkbox" class="file-checkbox" ${disabled}>
@@ -718,7 +851,7 @@ function renderResults() {
         <div class="file-details">
           <p class="file-name">${file.name}</p>
           <p class="file-size">${file.size}</p>
-          ${!file.canRecover ? '<p class="pro-feature">🔒 Apenas em PRO</p>' : ''}
+          ${blockedMessage}
         </div>
       </div>
     `;
@@ -756,15 +889,20 @@ function renderResults() {
     updateFileSelection();
   });
   
-  checkboxes.forEach((checkbox, index) => {
+  checkboxes.forEach((checkbox) => {
     checkbox.addEventListener('change', updateFileSelection);
   });
   
   function updateFileSelection() {
-    selectedFiles = Array.from(checkboxes)
-      .map((cb, i) => cb.checked ? scanResults[i].id : null)
-      .filter(Boolean);
-    resultsCount.textContent = `${selectedFiles.length} / ${scanResults.length} selecionados`;
+    selectedFiles = [];
+    checkboxes.forEach((cb) => {
+      if (cb.checked) {
+        const fileId = parseInt(cb.closest('.result-item').dataset.fileId);
+        selectedFiles.push(fileId);
+      }
+    });
+    const recoveringCount = scanResults.filter(f => f.canRecover).length;
+    resultsCount.textContent = `${selectedFiles.length} / ${recoveringCount} selecionados`;
   }
   
   document.getElementById('btn-recover').addEventListener('click', () => {
@@ -1099,6 +1237,7 @@ function initAccessibilityControls() {
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     initAccessibilityControls();
+    initThemeControls();
     if (typeof authManager !== 'undefined' && authManager.isAuthenticated && authManager.isAuthenticated()) {
       currentUser = authManager.getUser();
       selectedPlan = authManager.getPlan && authManager.getPlan() || 'FREE';
@@ -1110,6 +1249,7 @@ if (document.readyState === 'loading') {
   });
 } else {
   initAccessibilityControls();
+  initThemeControls();
   if (typeof authManager !== 'undefined' && authManager.isAuthenticated && authManager.isAuthenticated()) {
     currentUser = authManager.getUser();
     selectedPlan = authManager.getPlan && authManager.getPlan() || 'FREE';
@@ -1119,3 +1259,85 @@ if (document.readyState === 'loading') {
     showPlansComparison();
   }
 }
+
+// ===== Gerenciamento de Tema =====
+
+function initThemeControls() {
+  const btnThemeToggle = document.getElementById('btn-theme-toggle');
+  
+  if (btnThemeToggle) {
+    btnThemeToggle.addEventListener('click', async () => {
+      await toggleTheme();
+    });
+  }
+  
+  // Carregar tema salvo ou padrão
+  loadTheme();
+  
+  // Ouvir mudanças de tema do Electron main
+  if (typeof window.electron !== 'undefined' && window.electron.onThemeChanged) {
+    window.electron.onThemeChanged((theme) => {
+      applyTheme(theme);
+    });
+  }
+}
+
+async function toggleTheme() {
+  try {
+    if (typeof window.electron !== 'undefined' && window.electron.invoke) {
+      const newTheme = await window.electron.invoke('toggle-theme');
+      applyTheme(newTheme);
+      localStorage.setItem('app-theme', newTheme);
+    }
+  } catch (error) {
+    console.error('Erro ao alternar tema:', error);
+  }
+}
+
+async function setTheme(theme) {
+  try {
+    if (typeof window.electron !== 'undefined' && window.electron.invoke) {
+      const appliedTheme = await window.electron.invoke('set-theme', theme);
+      applyTheme(appliedTheme);
+      localStorage.setItem('app-theme', appliedTheme);
+    }
+  } catch (error) {
+    console.error('Erro ao definir tema:', error);
+  }
+}
+
+async function loadTheme() {
+  try {
+    let theme = localStorage.getItem('app-theme');
+    
+    if (!theme) {
+      if (typeof window.electron !== 'undefined' && window.electron.invoke) {
+        theme = await window.electron.invoke('get-theme');
+      } else {
+        theme = 'dark';
+      }
+    }
+    
+    applyTheme(theme);
+  } catch (error) {
+    console.error('Erro ao carregar tema:', error);
+    applyTheme('dark');
+  }
+}
+
+function applyTheme(theme) {
+  if (theme === 'light') {
+    document.body.classList.remove('theme-dark');
+    document.body.classList.add('theme-light');
+  } else {
+    document.body.classList.remove('theme-light');
+    document.body.classList.add('theme-dark');
+  }
+  
+  const btnThemeToggle = document.getElementById('btn-theme-toggle');
+  if (btnThemeToggle) {
+    btnThemeToggle.textContent = theme === 'light' ? '🌙 Tema' : '☀️ Tema';
+    btnThemeToggle.title = theme === 'light' ? 'Alternar para tema escuro' : 'Alternar para tema claro';
+  }
+}
+

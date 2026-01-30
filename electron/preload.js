@@ -6,3 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   chooseDestination: () => ipcRenderer.invoke('choose-destination'),
   recoverFiles: (files, destination) => ipcRenderer.invoke('recover-files', { files, destination })
 })
+contextBridge.exposeInMainWorld('electron', {
+  invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
+  onThemeChanged: (callback) => ipcRenderer.on('theme-changed', (event, theme) => callback(theme))
+})

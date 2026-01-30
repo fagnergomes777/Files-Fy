@@ -5,6 +5,7 @@ class PaymentController {
   static async createPaymentIntent(req, res) {
     try {
       const { userId, planType, paymentMethod } = req.body;
+      
       if (!userId || !planType) return res.status(400).json({ error: 'Dados incompletos' });
 
       const amount = planType === 'PRO' ? 2990 : 0;
@@ -13,18 +14,20 @@ class PaymentController {
       // Criar pagamento no banco (sem Stripe se chave inválida)
       const payment = await Payment.create(userId, null, amount, null, 'pendente');
 
-      // Se Stripe não está configurado, simular sucesso para teste
       const stripeKey = process.env.STRIPE_SECRET_KEY;
       if (!stripeKey || stripeKey === 'sk_test_xxx' || stripeKey.includes('USE_YOUR')) {
-        console.log('⚠️  Stripe não configurado. Simulando pagamento...');
         // Simular aprovação automática
-        await Payment.updateStatus(payment.id, 'pago');
-        await Subscription.updatePlan(userId, 'PRO');
+        const updatedPayment = await Payment.updateStatus(payment.id, 'pago');
+        
+        const subscription = await Subscription.updatePlan(userId, 'PRO');
+        
         return res.json({ 
-          success: true, 
+          success: true,
+          message: 'Pagamento processado com sucesso (simulado)',
           clientSecret: 'sim_' + payment.id,
           paymentId: payment.id,
-          message: '⚠️ Stripe não configurado - pagamento simulado'
+          payment: updatedPayment,
+          subscription: subscription
         });
       }
 
@@ -37,9 +40,14 @@ class PaymentController {
         metadata: { userId, paymentId: payment.id }
       });
 
-      res.json({ success: true, clientSecret: intent.client_secret, paymentId: payment.id });
+      res.json({ 
+        success: true, 
+        message: 'Intent de pagamento criado',
+        clientSecret: intent.client_secret, 
+        paymentId: payment.id 
+      });
     } catch (error) {
-      console.error('Erro payment intent:', error.message);
+      console.error('❌ Erro payment intent:', error.message);
       res.status(500).json({ error: 'Erro ao criar pagamento: ' + error.message });
     }
   }
